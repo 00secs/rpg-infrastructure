@@ -1,3 +1,5 @@
+pub mod graphic;
+
 use crate::EError;
 use std::sync::Arc;
 use winit::{application::*, dpi::*, event::*, event_loop::*, window::*};
@@ -10,13 +12,21 @@ pub struct ApplicationInfo {
     pub is_fullscreen: bool,
 }
 
-/// winitベースウィンドウアプリケーションの構造体。
-struct Application {
-    info: ApplicationInfo,
-    window: Option<Arc<Window>>,
+/// マネージャオブジェクトの集合。
+///
+/// クライアントはこのマネージャを叩いてゲームを表現する。
+pub struct Managers<'a> {
+    pub gr_mngr: graphic::GraphicManager<'a>,
 }
 
-impl ApplicationHandler for Application {
+/// winitベースウィンドウアプリケーションの構造体。
+struct Application<'a> {
+    info: ApplicationInfo,
+    window: Option<Arc<Window>>,
+    mngrs: Option<Managers<'a>>,
+}
+
+impl<'a> ApplicationHandler for Application<'a> {
     /// アプリケーションが再開されたときに呼ばれるメソッド。
     ///
     /// ことWindows, macOS, Linuxにおいてはアプリケーション起動直後に一度だけ呼ばれる。
@@ -48,7 +58,12 @@ impl ApplicationHandler for Application {
 
         let window = Arc::new(window);
 
+        let gr_mngr = graphic::GraphicManager::new(window.clone())
+            .expect("failed to create a graphic manager.");
+        let mngrs = Managers { gr_mngr };
+
         self.window = Some(window);
+        self.mngrs = Some(mngrs);
     }
 
     /// ウィンドウイベントを処理するメソッド。
@@ -74,6 +89,8 @@ impl ApplicationHandler for Application {
         if self.window.is_none() {
             return;
         }
+
+        self.mngrs.as_ref().unwrap().gr_mngr.render();
     }
 }
 
@@ -83,6 +100,10 @@ impl ApplicationHandler for Application {
 pub fn run(info: ApplicationInfo) -> Result<(), EError> {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    event_loop.run_app(&mut Application { info, window: None })?;
+    event_loop.run_app(&mut Application {
+        info,
+        window: None,
+        mngrs: None,
+    })?;
     Ok(())
 }
