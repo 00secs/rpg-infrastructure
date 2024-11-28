@@ -1,3 +1,6 @@
+mod model;
+mod pipeline;
+
 use crate::EError;
 use futures::executor;
 use std::sync::Arc;
@@ -5,12 +8,14 @@ use wgpu::*;
 use winit::window::Window;
 
 /// WebGPUベースのレンダラ。
+///
+/// - リサイズ不可
+/// - FIFO
 pub struct GraphicManager<'a> {
     surface: Surface<'a>,
     device: Device,
     queue: Queue,
-    surface_capabilities: SurfaceCapabilities,
-    surface_format: TextureFormat,
+    base_pipeline: pipeline::BasePipeline,
 }
 
 impl<'a> GraphicManager<'a> {
@@ -64,23 +69,31 @@ impl<'a> GraphicManager<'a> {
                 format: surface_format,
                 width: window.inner_size().width,
                 height: window.inner_size().height,
-                present_mode: PresentMode::Immediate,
+                present_mode: PresentMode::AutoVsync,
                 view_formats: Vec::new(),
                 alpha_mode: surface_capabilities.alpha_modes[0],
                 desired_maximum_frame_latency: 2,
             },
         );
 
+        let base_pipeline = pipeline::BasePipeline::new(
+            &device,
+            surface_format.into(),
+            window.inner_size().width,
+            window.inner_size().height,
+        );
+
         Ok(Self {
             surface,
             device,
             queue,
-            surface_capabilities,
-            surface_format,
+            base_pipeline,
         })
     }
 
     /// 描画を行うメソッド。
+    ///
+    /// 垂直同期を取るため、スレッドが待機される。
     pub fn render(&self) {
         let Ok(surface_texture) = self.surface.get_current_texture() else {
             // 描画先テクスチャの取得に失敗。
@@ -94,7 +107,8 @@ impl<'a> GraphicManager<'a> {
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
-        // TODO: 描画
+        self.base_pipeline
+            .render(&mut command_encoder, &render_target_view);
 
         self.queue.submit(Some(command_encoder.finish()));
         surface_texture.present();

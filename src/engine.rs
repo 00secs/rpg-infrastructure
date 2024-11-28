@@ -1,7 +1,7 @@
 pub mod graphic;
 
 use crate::EError;
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use winit::{application::*, dpi::*, event::*, event_loop::*, window::*};
 
 /// アプリケーションの基本情報。
@@ -24,6 +24,7 @@ struct Application<'a> {
     info: ApplicationInfo,
     window: Option<Arc<Window>>,
     mngrs: Option<Managers<'a>>,
+    last: Instant,
 }
 
 impl<'a> ApplicationHandler for Application<'a> {
@@ -90,6 +91,10 @@ impl<'a> ApplicationHandler for Application<'a> {
             return;
         }
 
+        println!("[ debug ] duration: {:?}", self.last.elapsed());
+        // TODO: ゲーム更新
+        self.last = Instant::now();
+
         self.mngrs.as_ref().unwrap().gr_mngr.render();
     }
 }
@@ -104,6 +109,7 @@ pub fn run(info: ApplicationInfo) -> Result<(), EError> {
         info,
         window: None,
         mngrs: None,
+        last: Instant::now(),
     })?;
     Ok(())
 }
