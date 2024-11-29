@@ -1,3 +1,4 @@
+mod image;
 mod model;
 pub mod pipeline;
 
@@ -79,6 +80,7 @@ impl<'a> GraphicManager<'a> {
 
         let base_pipeline = pipeline::BasePipeline::new(
             &device,
+            &queue,
             surface_format.into(),
             window.inner_size().width,
             window.inner_size().height,

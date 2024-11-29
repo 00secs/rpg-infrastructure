@@ -1,5 +1,5 @@
 use crate::engine::graphic::model;
-use crate::{anything_to_u8slice, slice_to_u8slice};
+use crate::{anything_to_u8slice, engine::graphic::image::*, slice_to_u8slice};
 use glam::{Mat4, Vec4};
 use std::{borrow::Cow, mem, ops::Range};
 use wgpu::{util::*, *};
@@ -21,13 +21,13 @@ struct Instance {
 @binding(1)
 var<uniform> instances: array<Instance, 16>;
 
-// @group(1)
-// @binding(0)
-// var image_texture: texture_2d<f32>;
+@group(1)
+@binding(0)
+var image_texture: texture_2d<f32>;
 
-// @group(1)
-// @binding(1)
-// var image_sampler: sampler;
+@group(1)
+@binding(1)
+var image_sampler: sampler;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -57,8 +57,7 @@ fn vs_main(
 
 @fragment
 fn fs_main(vertex_outout: VertexOutput) -> @location(0) vec4<f32> {
-    // return textureSample(image_texture, image_sampler, vertex_outout.tex_coord);
-    return vec4(1.0, 1.0, 1.0, 1.0);
+    return textureSample(image_texture, image_sampler, vertex_outout.tex_coord);
 }
 ";
 
@@ -84,15 +83,18 @@ pub struct Instance {
 pub struct BasePipeline {
     render_pipeline: RenderPipeline,
     depth_texture_view: TextureView,
-    _camera_buffer: Buffer,
+    camera_buffer: Buffer,
     instance_buffer: Buffer,
+    _default_image: TextureView,
+    _sampler: Sampler,
     bind_group_0: BindGroup,
-    // bind_group_1: BindGroup,
+    bind_group_1: BindGroup,
 }
 
 impl BasePipeline {
     pub fn new(
         device: &Device,
+        queue: &Queue,
         color_target_state: ColorTargetState,
         width: u32,
         height: u32,
@@ -133,33 +135,32 @@ impl BasePipeline {
         });
 
         // group(1)のレイアウトを定義
-        // let bind_group_1_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        //     label: None,
-        //     entries: &[
-        //         BindGroupLayoutEntry {
-        //             binding: 0,
-        //             visibility: ShaderStages::FRAGMENT,
-        //             ty: BindingType::Texture {
-        //                 sample_type: TextureSampleType::Float { filterable: true },
-        //                 view_dimension: TextureViewDimension::D2,
-        //                 multisampled: false,
-        //             },
-        //             count: None,
-        //         },
-        //         BindGroupLayoutEntry {
-        //             binding: 1,
-        //             visibility: ShaderStages::FRAGMENT,
-        //             ty: BindingType::Sampler(SamplerBindingType::Filtering),
-        //             count: None,
-        //         },
-        //     ],
-        // });
+        let bind_group_1_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
 
         // パイプラインのレイアウトを定義
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            // bind_group_layouts: &[&bind_group_0_layout, &bind_group_1_layout],
-            bind_group_layouts: &[&bind_group_0_layout],
+            bind_group_layouts: &[&bind_group_0_layout, &bind_group_1_layout],
             push_constant_ranges: &[],
         });
 
@@ -250,7 +251,7 @@ impl BasePipeline {
             ),
             _view: Mat4::IDENTITY,
         };
-        let _camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: anything_to_u8slice(&camera),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -277,7 +278,7 @@ impl BasePipeline {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: _camera_buffer.as_entire_binding(),
+                    resource: camera_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 1,
@@ -286,35 +287,52 @@ impl BasePipeline {
             ],
         });
 
+        // 標準の画像を作成
+        let _default_image = create_image_texture_view(device, queue, 1, 1, &[0xffffffff]);
+
+        // サンプラを作成
+        let _sampler = device.create_sampler(&SamplerDescriptor {
+            label: None,
+            address_mode_u: AddressMode::Repeat,
+            address_mode_v: AddressMode::Repeat,
+            address_mode_w: AddressMode::Repeat,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Nearest,
+            mipmap_filter: FilterMode::Nearest,
+            ..Default::default()
+        });
+
         // group(1)のバッファを作成
-        // let bind_group_1 = device.create_bind_group(&BindGroupDescriptor {
-        //     label: None,
-        //     layout: &bind_group_1_layout,
-        //     entries: &[
-        //         BindGroupEntry {
-        //             binding: 0,
-        //             resource: std::ptr::null(),
-        //         },
-        //         BindGroupEntry {
-        //             binding: 1,
-        //             resource: std::ptr::null(),
-        //         },
-        //     ],
-        // });
+        let bind_group_1 = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_1_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&_default_image),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&_sampler),
+                },
+            ],
+        });
 
         Self {
             render_pipeline,
             depth_texture_view,
-            _camera_buffer,
+            camera_buffer,
             instance_buffer,
+            _default_image,
+            _sampler,
             bind_group_0,
-            // bind_group_1,
+            bind_group_1,
         }
     }
 
     /// カメラバッファを更新するメソッド。
     pub fn update_camera(&self, queue: &Queue, camera: &Camera) {
-        queue.write_buffer(&self._camera_buffer, 0, anything_to_u8slice(camera));
+        queue.write_buffer(&self.camera_buffer, 0, anything_to_u8slice(camera));
     }
 
     /// インスタンスバッファを更新するメソッド。
@@ -372,7 +390,7 @@ impl BasePipeline {
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
-        // render_pass.set_bind_group(0, &self.bind_group_1, &[]);
+        render_pass.set_bind_group(1, &self.bind_group_1, &[]);
 
         render_pass.set_vertex_buffer(0, model.vertex_buffer.slice(..));
         render_pass.set_index_buffer(model.index_buffer.slice(..), IndexFormat::Uint16);
