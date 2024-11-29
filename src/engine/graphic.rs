@@ -16,6 +16,7 @@ pub struct GraphicManager<'a> {
     device: Device,
     queue: Queue,
     base_pipeline: pipeline::BasePipeline,
+    square_model: model::Model,
 }
 
 impl<'a> GraphicManager<'a> {
@@ -83,11 +84,14 @@ impl<'a> GraphicManager<'a> {
             window.inner_size().height,
         );
 
+        let square_model = model::create_square_model(&device);
+
         Ok(Self {
             surface,
             device,
             queue,
             base_pipeline,
+            square_model,
         })
     }
 
@@ -107,8 +111,11 @@ impl<'a> GraphicManager<'a> {
             .device
             .create_command_encoder(&CommandEncoderDescriptor { label: None });
 
-        self.base_pipeline
-            .render(&mut command_encoder, &render_target_view);
+        self.base_pipeline.render(
+            &mut command_encoder,
+            &render_target_view,
+            &self.square_model,
+        );
 
         self.queue.submit(Some(command_encoder.finish()));
         surface_texture.present();

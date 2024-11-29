@@ -1,5 +1,6 @@
+use crate::slice_to_u8slice;
 use std::mem;
-use wgpu::*;
+use wgpu::{util::*, *};
 
 /// 一頂点のデータの構造体。
 ///
@@ -26,3 +27,53 @@ pub const VERTEX_BUFFER_LAYOUTS: &[VertexBufferLayout] = &[VertexBufferLayout {
         },
     ],
 }];
+
+/// モデルデータの構造体。
+pub struct Model {
+    pub vertex_buffer: Buffer,
+    pub index_buffer: Buffer,
+    pub index_count: usize,
+}
+
+/// 正方形モデルを作成する関数。
+pub fn create_square_model(device: &Device) -> Model {
+    const VERTICES: &[Vertex] = &[
+        // 左下
+        Vertex {
+            _position: [-0.5, -0.5, 0.0, 1.0],
+            _tex_coord: [0.0, 1.0],
+        },
+        // 左上
+        Vertex {
+            _position: [-0.5, 0.5, 0.0, 1.0],
+            _tex_coord: [0.0, 0.0],
+        },
+        // 右上
+        Vertex {
+            _position: [0.5, 0.5, 0.0, 1.0],
+            _tex_coord: [1.0, 0.0],
+        },
+        // 右下
+        Vertex {
+            _position: [0.5, -0.5, 0.0, 1.0],
+            _tex_coord: [1.0, 1.0],
+        },
+    ];
+    const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
+
+    let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: slice_to_u8slice(VERTICES),
+        usage: BufferUsages::VERTEX,
+    });
+    let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        label: None,
+        contents: slice_to_u8slice(INDICES),
+        usage: BufferUsages::INDEX,
+    });
+    Model {
+        vertex_buffer,
+        index_buffer,
+        index_count: INDICES.len(),
+    }
+}

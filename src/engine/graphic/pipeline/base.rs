@@ -20,13 +20,13 @@ struct Instance {
 @binding(1)
 var<uniform> instances: array<Instance, 16>;
 
-@group(0)
-@binding(2)
-var image_texture: texture_2d<f32>;
+// @group(1)
+// @binding(0)
+// var image_texture: texture_2d<f32>;
 
-@group(0)
-@binding(3)
-var image_sampler: sampler;
+// @group(1)
+// @binding(1)
+// var image_sampler: sampler;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
@@ -56,7 +56,8 @@ fn vs_main(
 
 @fragment
 fn fs_main(vertex_outout: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(image_texture, image_sampler, vertex_outout.tex_coord);
+    // return textureSample(image_texture, image_sampler, vertex_outout.tex_coord);
+    return vec4(1.0, 1.0, 1.0, 1.0);
 }
 ";
 
@@ -85,8 +86,10 @@ struct Instance {
 pub struct BasePipeline {
     render_pipeline: RenderPipeline,
     depth_texture_view: TextureView,
-    camera_buffer: Buffer,
+    _camera_buffer: Buffer,
     instance_buffer: Buffer,
+    bind_group_0: BindGroup,
+    // bind_group_1: BindGroup,
 }
 
 impl BasePipeline {
@@ -102,7 +105,7 @@ impl BasePipeline {
             source: ShaderSource::Wgsl(Cow::from(SHADER)),
         });
 
-        // binding(0)のレイアウトを定義
+        // group(0)のレイアウトを定義
         let bind_group_0_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -128,28 +131,36 @@ impl BasePipeline {
                     },
                     count: None,
                 },
-                BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Texture {
-                        sample_type: TextureSampleType::Float { filterable: true },
-                        view_dimension: TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: ShaderStages::FRAGMENT,
-                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                    count: None,
-                },
             ],
         });
+
+        // group(1)のレイアウトを定義
+        // let bind_group_1_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        //     label: None,
+        //     entries: &[
+        //         BindGroupLayoutEntry {
+        //             binding: 0,
+        //             visibility: ShaderStages::FRAGMENT,
+        //             ty: BindingType::Texture {
+        //                 sample_type: TextureSampleType::Float { filterable: true },
+        //                 view_dimension: TextureViewDimension::D2,
+        //                 multisampled: false,
+        //             },
+        //             count: None,
+        //         },
+        //         BindGroupLayoutEntry {
+        //             binding: 1,
+        //             visibility: ShaderStages::FRAGMENT,
+        //             ty: BindingType::Sampler(SamplerBindingType::Filtering),
+        //             count: None,
+        //         },
+        //     ],
+        // });
 
         // パイプラインのレイアウトを定義
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
+            // bind_group_layouts: &[&bind_group_0_layout, &bind_group_1_layout],
             bind_group_layouts: &[&bind_group_0_layout],
             push_constant_ranges: &[],
         });
@@ -240,7 +251,7 @@ impl BasePipeline {
                 100.0,
             ),
         };
-        let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
+        let _camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
             contents: anything_to_u8slice(&camera),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -260,11 +271,45 @@ impl BasePipeline {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
+        // group(0)のバッファを作成
+        let bind_group_0 = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_0_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: _camera_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: instance_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        // group(1)のバッファを作成
+        // let bind_group_1 = device.create_bind_group(&BindGroupDescriptor {
+        //     label: None,
+        //     layout: &bind_group_1_layout,
+        //     entries: &[
+        //         BindGroupEntry {
+        //             binding: 0,
+        //             resource: std::ptr::null(),
+        //         },
+        //         BindGroupEntry {
+        //             binding: 1,
+        //             resource: std::ptr::null(),
+        //         },
+        //     ],
+        // });
+
         Self {
             render_pipeline,
             depth_texture_view,
-            camera_buffer,
+            _camera_buffer,
             instance_buffer,
+            bind_group_0,
+            // bind_group_1,
         }
     }
 
@@ -275,6 +320,7 @@ impl BasePipeline {
         &self,
         command_encoder: &'a mut CommandEncoder,
         render_target_view: &TextureView,
+        model: &model::Model,
     ) {
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
             label: None,
@@ -304,7 +350,12 @@ impl BasePipeline {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_bind_group(0, &self.bind_group_0, &[]);
+        // render_pass.set_bind_group(0, &self.bind_group_1, &[]);
 
-        // TODO: 描画
+        render_pass.set_vertex_buffer(0, model.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(model.index_buffer.slice(..), IndexFormat::Uint16);
+
+        render_pass.draw_indexed(0..model.index_count as u32, 0, 0..1);
     }
 }
