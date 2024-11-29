@@ -1,7 +1,10 @@
 pub mod graphic;
 
 use crate::EError;
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use winit::{application::*, dpi::*, event::*, event_loop::*, window::*};
 
 /// アプリケーションの基本情報。
@@ -19,15 +22,30 @@ pub struct Managers<'a> {
     pub gr_mngr: graphic::GraphicManager<'a>,
 }
 
+/// クライアントが実装すべきトレイト。
+pub trait ClientHandler {
+    /// クライアント更新メソッド。
+    ///
+    /// アプリケーションを続行する場合true、終了する場合falseを返す。
+    fn update(&mut self, mngrs: &Managers, duration: Duration) -> bool;
+}
+
 /// winitベースウィンドウアプリケーションの構造体。
-struct Application<'a> {
+struct Application<'a, T>
+where
+    T: ClientHandler,
+{
     info: ApplicationInfo,
     window: Option<Arc<Window>>,
     mngrs: Option<Managers<'a>>,
     last: Instant,
+    client: T,
 }
 
-impl<'a> ApplicationHandler for Application<'a> {
+impl<'a, T> ApplicationHandler for Application<'a, T>
+where
+    T: ClientHandler,
+{
     /// アプリケーションが再開されたときに呼ばれるメソッド。
     ///
     /// ことWindows, macOS, Linuxにおいてはアプリケーション起動直後に一度だけ呼ばれる。
@@ -86,23 +104,28 @@ impl<'a> ApplicationHandler for Application<'a> {
     /// デッドタイムに呼ばれるメソッド。
     ///
     /// つまり、アプリケーションのメインループ。
-    fn about_to_wait(&mut self, _: &ActiveEventLoop) {
+    /// クライアントの更新メソッドを呼ぶ。
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_none() {
             return;
         }
-
-        println!("[ debug ] duration: {:?}", self.last.elapsed());
-        // TODO: ゲーム更新
+        if !self
+            .client
+            .update(self.mngrs.as_ref().unwrap(), self.last.elapsed())
+        {
+            event_loop.exit();
+        }
         self.last = Instant::now();
-
-        self.mngrs.as_ref().unwrap().gr_mngr.render();
     }
 }
 
 /// winitベースウィンドウアプリケーションを実行する関数。
 ///
 /// ウィンドウが閉じられるまでスレッドを待機する。
-pub fn run(info: ApplicationInfo) -> Result<(), EError> {
+pub fn run<T>(info: ApplicationInfo, client: T) -> Result<(), EError>
+where
+    T: ClientHandler,
+{
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop.run_app(&mut Application {
@@ -110,6 +133,7 @@ pub fn run(info: ApplicationInfo) -> Result<(), EError> {
         window: None,
         mngrs: None,
         last: Instant::now(),
+        client,
     })?;
     Ok(())
 }

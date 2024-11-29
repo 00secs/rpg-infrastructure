@@ -1,7 +1,7 @@
 use crate::engine::graphic::model;
 use crate::{anything_to_u8slice, slice_to_u8slice};
 use glam::{Mat4, Vec4};
-use std::{borrow::Cow, mem};
+use std::{borrow::Cow, cmp, mem};
 use wgpu::{util::*, *};
 
 const SHADER: &str = "
@@ -13,7 +13,7 @@ struct Camera {
 var<uniform> camera: Camera;
 
 struct Instance {
-    model: mat4x4<f32>,
+    world: mat4x4<f32>,
     tex_coord: vec4<f32>,
 }
 @group(0)
@@ -44,7 +44,7 @@ fn vs_main(
 ) -> VertexOutput {
     var result: VertexOutput;
 
-    result.position = camera.projection * instances[instance_index].model * vertex_input.position;
+    result.position = camera.projection * instances[instance_index].world * vertex_input.position;
 
     result.tex_coord = vec2<f32>(
         instances[instance_index].tex_coord.x + instances[instance_index].tex_coord.z * vertex_input.tex_coord.x,
@@ -61,16 +61,17 @@ fn fs_main(vertex_outout: VertexOutput) -> @location(0) vec4<f32> {
 }
 ";
 
-const MAX_INSTANCE_COUNT: u64 = 16;
+const MAX_INSTANCE_COUNT: u32 = 16;
 
 struct Camera {
     _projection: Mat4,
 }
 
+/// インスタンスの構造体。
 #[derive(Clone)]
-struct Instance {
-    _model: Mat4,
-    _tex_coord: Vec4,
+pub struct Instance {
+    pub _world: Mat4,
+    pub _tex_coord: Vec4,
 }
 
 /// 普通のレンダーパイプライン。
@@ -126,7 +127,7 @@ impl BasePipeline {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: BufferSize::new(
-                            mem::size_of::<Instance>() as u64 * MAX_INSTANCE_COUNT,
+                            mem::size_of::<Instance>() as u64 * MAX_INSTANCE_COUNT as u64,
                         ),
                     },
                     count: None,
@@ -261,8 +262,8 @@ impl BasePipeline {
         let instances = (0..MAX_INSTANCE_COUNT)
             .into_iter()
             .map(|_| Instance {
-                _model: Mat4::IDENTITY,
-                _tex_coord: Vec4::new(0.0, 0.0, 0.0, 1.0),
+                _world: Mat4::IDENTITY,
+                _tex_coord: Vec4::new(0.0, 0.0, 1.0, 1.0),
             })
             .collect::<Vec<Instance>>();
         let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -320,8 +321,17 @@ impl BasePipeline {
         &self,
         command_encoder: &'a mut CommandEncoder,
         render_target_view: &TextureView,
+        queue: &Queue,
         model: &model::Model,
+        instances: &[Instance],
     ) {
+        let instances_count = cmp::min(instances.len(), MAX_INSTANCE_COUNT as usize);
+        queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            slice_to_u8slice(&instances[..instances_count]),
+        );
+
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -356,6 +366,6 @@ impl BasePipeline {
         render_pass.set_vertex_buffer(0, model.vertex_buffer.slice(..));
         render_pass.set_index_buffer(model.index_buffer.slice(..), IndexFormat::Uint16);
 
-        render_pass.draw_indexed(0..model.index_count as u32, 0, 0..1);
+        render_pass.draw_indexed(0..model.index_count as u32, 0, 0..instances_count as u32);
     }
 }

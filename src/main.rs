@@ -1,3 +1,4 @@
+mod client;
 mod engine;
 
 type EError = Box<dyn std::error::Error>;
@@ -16,11 +17,14 @@ fn main() {
     const SCENE_WIDTH: f32 = 1280.0;
     const SCENE_HEIGHT: f32 = 720.0;
 
-    engine::run(engine::ApplicationInfo {
-        title: "タイトル",
-        width: SCENE_WIDTH,
-        height: SCENE_HEIGHT,
-        is_fullscreen: false,
-    })
+    engine::run(
+        engine::ApplicationInfo {
+            title: "タイトル",
+            width: SCENE_WIDTH,
+            height: SCENE_HEIGHT,
+            is_fullscreen: false,
+        },
+        client::GameManager {},
+    )
     .unwrap();
 }

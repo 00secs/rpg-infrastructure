@@ -1,5 +1,5 @@
 mod model;
-mod pipeline;
+pub mod pipeline;
 
 use crate::EError;
 use futures::executor;
@@ -98,7 +98,7 @@ impl<'a> GraphicManager<'a> {
     /// 描画を行うメソッド。
     ///
     /// 垂直同期を取るため、スレッドが待機される。
-    pub fn render(&self) {
+    pub fn render(&self, instances: &[pipeline::BaseInstance]) {
         let Ok(surface_texture) = self.surface.get_current_texture() else {
             // 描画先テクスチャの取得に失敗。
             // 警告レベルなので早期returnで済ます。
@@ -114,7 +114,9 @@ impl<'a> GraphicManager<'a> {
         self.base_pipeline.render(
             &mut command_encoder,
             &render_target_view,
+            &self.queue,
             &self.square_model,
+            instances,
         );
 
         self.queue.submit(Some(command_encoder.finish()));
