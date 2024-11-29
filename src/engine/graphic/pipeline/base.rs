@@ -1,12 +1,13 @@
 use crate::engine::graphic::model;
 use crate::{anything_to_u8slice, slice_to_u8slice};
 use glam::{Mat4, Vec4};
-use std::{borrow::Cow, cmp, mem};
+use std::{borrow::Cow, mem, ops::Range};
 use wgpu::{util::*, *};
 
 const SHADER: &str = "
 struct Camera {
     projection: mat4x4<f32>,
+    view: mat4x4<f32>,
 }
 @group(0)
 @binding(0)
@@ -44,7 +45,7 @@ fn vs_main(
 ) -> VertexOutput {
     var result: VertexOutput;
 
-    result.position = camera.projection * instances[instance_index].world * vertex_input.position;
+    result.position = camera.projection * camera.view * instances[instance_index].world * vertex_input.position;
 
     result.tex_coord = vec2<f32>(
         instances[instance_index].tex_coord.x + instances[instance_index].tex_coord.z * vertex_input.tex_coord.x,
@@ -63,8 +64,10 @@ fn fs_main(vertex_outout: VertexOutput) -> @location(0) vec4<f32> {
 
 const MAX_INSTANCE_COUNT: u32 = 16;
 
-struct Camera {
-    _projection: Mat4,
+/// カメラの構造体。
+pub struct Camera {
+    pub _projection: Mat4,
+    pub _view: Mat4,
 }
 
 /// インスタンスの構造体。
@@ -76,12 +79,6 @@ pub struct Instance {
 
 /// 普通のレンダーパイプライン。
 ///
-/// カメラについて:
-/// - 平行投影
-/// - 位置は(0,0,0)で固定
-/// - 深さは100で固定
-///
-/// 他:
 /// - 深度テストあり
 /// - アルファブレンディングあり
 pub struct BasePipeline {
@@ -251,6 +248,7 @@ impl BasePipeline {
                 0.0,
                 100.0,
             ),
+            _view: Mat4::IDENTITY,
         };
         let _camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: None,
@@ -314,6 +312,27 @@ impl BasePipeline {
         }
     }
 
+    /// カメラバッファを更新するメソッド。
+    pub fn update_camera(&self, queue: &Queue, camera: &Camera) {
+        queue.write_buffer(&self._camera_buffer, 0, anything_to_u8slice(camera));
+    }
+
+    /// インスタンスバッファを更新するメソッド。
+    ///
+    /// WARN: インスタンスバッファを超過した分は無視される。
+    pub fn update_instances(&self, queue: &Queue, offset: u32, instances: &[Instance]) {
+        let instances = if offset + instances.len() as u32 > MAX_INSTANCE_COUNT {
+            &instances[0..(MAX_INSTANCE_COUNT - offset) as usize]
+        } else {
+            instances
+        };
+        queue.write_buffer(
+            &self.instance_buffer,
+            offset as u64,
+            slice_to_u8slice(instances),
+        );
+    }
+
     /// 描画を行うメソッド。
     ///
     /// 各フレームの最初に呼ばれるパイプラインであることを想定しているため、描画先テクスチャを(0,0,0,1)にクリアする。
@@ -321,17 +340,9 @@ impl BasePipeline {
         &self,
         command_encoder: &'a mut CommandEncoder,
         render_target_view: &TextureView,
-        queue: &Queue,
         model: &model::Model,
-        instances: &[Instance],
+        instances_range: Range<u32>,
     ) {
-        let instances_count = cmp::min(instances.len(), MAX_INSTANCE_COUNT as usize);
-        queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            slice_to_u8slice(&instances[..instances_count]),
-        );
-
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(RenderPassColorAttachment {
@@ -366,6 +377,6 @@ impl BasePipeline {
         render_pass.set_vertex_buffer(0, model.vertex_buffer.slice(..));
         render_pass.set_index_buffer(model.index_buffer.slice(..), IndexFormat::Uint16);
 
-        render_pass.draw_indexed(0..model.index_count as u32, 0, 0..instances_count as u32);
+        render_pass.draw_indexed(0..model.index_count as u32, 0, instances_range);
     }
 }

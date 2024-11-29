@@ -3,7 +3,7 @@ pub mod pipeline;
 
 use crate::EError;
 use futures::executor;
-use std::sync::Arc;
+use std::{ops::Range, sync::Arc};
 use wgpu::*;
 use winit::window::Window;
 
@@ -95,10 +95,25 @@ impl<'a> GraphicManager<'a> {
         })
     }
 
+    /// Baseレンダーパイプラインのカメラバッファを更新するメソッド。
+    pub fn update_camera(&self, camera: &pipeline::BaseCamera) {
+        self.base_pipeline.update_camera(&self.queue, camera);
+    }
+
+    /// Baseレンダーパイプラインのインスタンスバッファを更新するメソッド。
+    ///
+    /// WARN: インスタンスバッファを超過した分は無視される。
+    pub fn update_instances(&self, offset: u32, instances: &[pipeline::BaseInstance]) {
+        self.base_pipeline
+            .update_instances(&self.queue, offset, instances);
+    }
+
     /// 描画を行うメソッド。
     ///
+    /// * instances_range - 描画するインスタンスのインスタンスバッファ上のインデックス範囲。
+    ///
     /// 垂直同期を取るため、スレッドが待機される。
-    pub fn render(&self, instances: &[pipeline::BaseInstance]) {
+    pub fn render(&self, instances_range: Range<u32>) {
         let Ok(surface_texture) = self.surface.get_current_texture() else {
             // 描画先テクスチャの取得に失敗。
             // 警告レベルなので早期returnで済ます。
@@ -114,9 +129,8 @@ impl<'a> GraphicManager<'a> {
         self.base_pipeline.render(
             &mut command_encoder,
             &render_target_view,
-            &self.queue,
             &self.square_model,
-            instances,
+            instances_range,
         );
 
         self.queue.submit(Some(command_encoder.finish()));

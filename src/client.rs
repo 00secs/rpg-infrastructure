@@ -25,7 +25,8 @@ impl ClientHandler for GameManager {
                 _tex_coord: Vec4::new(0.0, 0.0, 1.0, 1.0),
             },
         ];
-        mngrs.gr_mngr.render(&instances);
+        mngrs.gr_mngr.update_instances(0, &instances);
+        mngrs.gr_mngr.render(0..instances.len() as u32);
 
         true
     }
