@@ -11,7 +11,7 @@ impl LoadScene {
     pub fn new(mngrs: &mut Managers) -> Scene {
         // TODO: エラー時はダイアログ出して落とす方が親切かも。
         let _ = mngrs.gr_mngr.load_image(&mngrs.rs_mngr, "load");
-        
+
         // ロード画面描画
         let instance = BaseInstance {
             _world: Mat4::from_scale(Vec3::new(SCENE_WIDTH, SCENE_HEIGHT, 1.0)),
@@ -22,7 +22,7 @@ impl LoadScene {
             image_id: "load",
             instances_range: 0..1,
         }]);
-        
+
         // リソースのロード
         let _ = mngrs.gr_mngr.load_image(&mngrs.rs_mngr, "title");
 

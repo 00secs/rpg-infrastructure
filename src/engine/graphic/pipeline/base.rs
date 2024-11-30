@@ -294,6 +294,8 @@ impl BasePipeline {
     }
 
     /// 画像に関するバインドグループを作成するメソッド。
+    ///
+    /// 既に何らかのバインドグループがidで登録済みであった場合、上書きする。
     //
     // NOTE: group(0)と異なり各フレームで何度も更新予定があるため、
     //       予めバインドグループを作成し各インスタンシング毎にセットする。
@@ -356,7 +358,7 @@ impl BasePipeline {
     /// 描画を行うメソッド。
     ///
     /// WARN: このメソッドは描画開始後に呼ぶべし。
-    /// WARN: バインドグループが作成されていない場合、無視される。
+    /// WARN: バインドグループが作成されていない場合、描画自体が無視される。
     /// WARN: インスタンスバッファを超過しているか否か、判定しない。
     pub fn render<'a>(
         &self,
@@ -367,7 +369,7 @@ impl BasePipeline {
     ) {
         if let Some(n) = self.bind_group_1s.get(bind_group_id) {
             render_pass.set_bind_group(1, n, &[]);
+            render_pass.draw_indexed(0..model_index_count, 0, instances_range);
         }
-        render_pass.draw_indexed(0..model_index_count, 0, instances_range);
     }
 }

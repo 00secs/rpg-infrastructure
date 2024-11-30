@@ -124,11 +124,16 @@ impl<'a> GraphicManager<'a> {
     }
 
     /// 画像リソースをロードするメソッド。
+    ///
+    /// WARN: 既に画像リソースがidでロードされている場合、エラーを返す。
     pub fn load_image(
         &mut self,
         rs_mngr: &ResourceManager,
         id: &'static str,
     ) -> Result<(), EError> {
+        if self.image_texture_views.contains_key(id) {
+            return Err(format!("image '{id}' is already registered.").into());
+        }
         let (bitmap, width, height) = rs_mngr.load_png(id)?;
         let image_texture_view = image::create_image_texture_view(
             &self.device,
