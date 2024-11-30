@@ -8,7 +8,8 @@ use glam::*;
 pub struct TitleScene;
 
 impl TitleScene {
-    pub fn new(mngrs: &mut Managers) -> Scene {
+    // タイトル画面で必要なリソースはすべてロード画面でロードしておく。
+    pub fn new() -> Scene {
         Box::new(Self)
     }
 }
