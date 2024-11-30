@@ -32,7 +32,7 @@ pub const VERTEX_BUFFER_LAYOUTS: &[VertexBufferLayout] = &[VertexBufferLayout {
 pub struct Model {
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
-    pub index_count: usize,
+    pub index_count: u32,
 }
 
 /// 正方形モデルを作成する関数。
@@ -74,6 +74,6 @@ pub fn create_square_model(device: &Device) -> Model {
     Model {
         vertex_buffer,
         index_buffer,
-        index_count: INDICES.len(),
+        index_count: INDICES.len() as u32,
     }
 }

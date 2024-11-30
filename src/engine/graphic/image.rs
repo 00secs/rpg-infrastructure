@@ -7,7 +7,7 @@ pub fn create_image_texture_view(
     queue: &Queue,
     width: u32,
     height: u32,
-    bitmap: &[u32],
+    bitmap: &[u8],
 ) -> TextureView {
     let size = Extent3d {
         width: width,

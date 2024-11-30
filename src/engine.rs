@@ -1,4 +1,5 @@
 pub mod graphic;
+pub mod resource;
 
 use crate::EError;
 use std::{
@@ -20,14 +21,18 @@ pub struct ApplicationInfo {
 /// クライアントはこのマネージャを叩いてゲームを表現する。
 pub struct Managers<'a> {
     pub gr_mngr: graphic::GraphicManager<'a>,
+    pub rs_mngr: resource::ResourceManager,
 }
 
 /// クライアントが実装すべきトレイト。
 pub trait ClientHandler {
+    /// クライアントコンストラクタ。
+    fn new(mngrs: &mut Managers) -> Self;
+
     /// クライアント更新メソッド。
     ///
     /// アプリケーションを続行する場合true、終了する場合falseを返す。
-    fn update(&mut self, mngrs: &Managers, duration: Duration) -> bool;
+    fn update(&mut self, mngrs: &mut Managers, duration: Duration) -> bool;
 }
 
 /// winitベースウィンドウアプリケーションの構造体。
@@ -38,8 +43,8 @@ where
     info: ApplicationInfo,
     window: Option<Arc<Window>>,
     mngrs: Option<Managers<'a>>,
+    client: Option<T>,
     last: Instant,
-    client: T,
 }
 
 impl<'a, T> ApplicationHandler for Application<'a, T>
@@ -79,10 +84,14 @@ where
 
         let gr_mngr = graphic::GraphicManager::new(window.clone())
             .expect("failed to create a graphic manager.");
-        let mngrs = Managers { gr_mngr };
+        let rs_mngr = resource::ResourceManager;
+        let mut mngrs = Managers { gr_mngr, rs_mngr };
+
+        let client = T::new(&mut mngrs);
 
         self.window = Some(window);
         self.mngrs = Some(mngrs);
+        self.client = Some(client);
     }
 
     /// ウィンドウイベントを処理するメソッド。
@@ -111,7 +120,9 @@ where
         }
         if !self
             .client
-            .update(self.mngrs.as_ref().unwrap(), self.last.elapsed())
+            .as_mut()
+            .unwrap()
+            .update(self.mngrs.as_mut().unwrap(), self.last.elapsed())
         {
             event_loop.exit();
         }
@@ -122,18 +133,18 @@ where
 /// winitベースウィンドウアプリケーションを実行する関数。
 ///
 /// ウィンドウが閉じられるまでスレッドを待機する。
-pub fn run<T>(info: ApplicationInfo, client: T) -> Result<(), EError>
+pub fn run<T>(info: ApplicationInfo) -> Result<(), EError>
 where
     T: ClientHandler,
 {
     let event_loop = EventLoop::new()?;
     event_loop.set_control_flow(ControlFlow::Poll);
-    event_loop.run_app(&mut Application {
+    event_loop.run_app(&mut Application::<T> {
         info,
         window: None,
         mngrs: None,
+        client: None,
         last: Instant::now(),
-        client,
     })?;
     Ok(())
 }

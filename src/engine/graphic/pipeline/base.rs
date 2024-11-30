@@ -1,7 +1,6 @@
-use crate::engine::graphic::model;
-use crate::{anything_to_u8slice, engine::graphic::image::*, slice_to_u8slice};
+use crate::{anything_to_u8slice, engine::graphic::model, slice_to_u8slice};
 use glam::{Mat4, Vec4};
-use std::{borrow::Cow, mem, ops::Range};
+use std::{borrow::Cow, collections::HashMap, mem, ops::Range};
 use wgpu::{util::*, *};
 
 const SHADER: &str = "
@@ -80,21 +79,20 @@ pub struct Instance {
 ///
 /// - 深度テストあり
 /// - アルファブレンディングあり
+/// - 拡大/縮小ともにアンチエイリアシングなし
 pub struct BasePipeline {
     render_pipeline: RenderPipeline,
-    depth_texture_view: TextureView,
     camera_buffer: Buffer,
     instance_buffer: Buffer,
-    _default_image: TextureView,
-    _sampler: Sampler,
+    sampler: Sampler,
+    bind_group_1_layout: BindGroupLayout,
     bind_group_0: BindGroup,
-    bind_group_1: BindGroup,
+    bind_group_1s: HashMap<&'static str, BindGroup>,
 }
 
 impl BasePipeline {
     pub fn new(
         device: &Device,
-        queue: &Queue,
         color_target_state: ColorTargetState,
         width: u32,
         height: u32,
@@ -219,24 +217,6 @@ impl BasePipeline {
 
         /* 以降、リソース作成 */
 
-        // 深度テクスチャのビューを作成
-        let depth_texture_view = device
-            .create_texture(&TextureDescriptor {
-                label: None,
-                size: Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Depth32Float,
-                usage: TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            })
-            .create_view(&TextureViewDescriptor::default());
-
         // カメラのバッファを作成
         let half_width = width as f32 / 2.0;
         let half_height = height as f32 / 2.0;
@@ -271,7 +251,22 @@ impl BasePipeline {
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
+        // サンプラを作成
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            label: None,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Nearest,
+            min_filter: FilterMode::Nearest,
+            mipmap_filter: FilterMode::Nearest,
+            ..Default::default()
+        });
+
         // group(0)のバッファを作成
+        //
+        // NOTE: group(1)と異なり各フレームで一度しか更新予定がないため、
+        //       一個のバインドグループを作り、バインドされているバッファを更新する。
         let bind_group_0 = device.create_bind_group(&BindGroupDescriptor {
             label: None,
             layout: &bind_group_0_layout,
@@ -287,63 +282,56 @@ impl BasePipeline {
             ],
         });
 
-        // 標準の画像を作成
-        let _default_image = create_image_texture_view(device, queue, 1, 1, &[0xffffffff]);
-
-        // サンプラを作成
-        let _sampler = device.create_sampler(&SamplerDescriptor {
-            label: None,
-            address_mode_u: AddressMode::Repeat,
-            address_mode_v: AddressMode::Repeat,
-            address_mode_w: AddressMode::Repeat,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
-            ..Default::default()
-        });
-
-        // group(1)のバッファを作成
-        let bind_group_1 = device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            layout: &bind_group_1_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&_default_image),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&_sampler),
-                },
-            ],
-        });
-
         Self {
             render_pipeline,
-            depth_texture_view,
             camera_buffer,
             instance_buffer,
-            _default_image,
-            _sampler,
+            sampler,
+            bind_group_1_layout,
             bind_group_0,
-            bind_group_1,
+            bind_group_1s: HashMap::new(),
         }
     }
 
+    /// 画像に関するバインドグループを作成するメソッド。
+    //
+    // NOTE: group(0)と異なり各フレームで何度も更新予定があるため、
+    //       予めバインドグループを作成し各インスタンシング毎にセットする。
+    pub fn load_bind_group_for_image(
+        &mut self,
+        device: &Device,
+        id: &'static str,
+        texture_view: &TextureView,
+    ) {
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            layout: &self.bind_group_1_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(texture_view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        });
+        self.bind_group_1s.insert(id, bind_group);
+    }
+
     /// カメラバッファを更新するメソッド。
+    ///
+    /// WARN: カメラバッファは各フレームの描画開始前に更新すべし。
     pub fn update_camera(&self, queue: &Queue, camera: &Camera) {
         queue.write_buffer(&self.camera_buffer, 0, anything_to_u8slice(camera));
     }
 
     /// インスタンスバッファを更新するメソッド。
     ///
-    /// WARN: インスタンスバッファを超過した分は無視される。
+    /// WARN: インスタンスバッファは各フレームの描画開始前に更新すべし。
+    /// WARN: インスタンスバッファを超過しているか否か、判定しない。
     pub fn update_instances(&self, queue: &Queue, offset: u32, instances: &[Instance]) {
-        let instances = if offset + instances.len() as u32 > MAX_INSTANCE_COUNT {
-            &instances[0..(MAX_INSTANCE_COUNT - offset) as usize]
-        } else {
-            instances
-        };
         queue.write_buffer(
             &self.instance_buffer,
             offset as u64,
@@ -351,50 +339,35 @@ impl BasePipeline {
         );
     }
 
-    /// 描画を行うメソッド。
-    ///
-    /// 各フレームの最初に呼ばれるパイプラインであることを想定しているため、描画先テクスチャを(0,0,0,1)にクリアする。
-    pub fn render<'a>(
-        &self,
-        command_encoder: &'a mut CommandEncoder,
-        render_target_view: &TextureView,
-        model: &model::Model,
-        instances_range: Range<u32>,
-    ) {
-        let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-            label: None,
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: render_target_view,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(Color {
-                        r: 0.0,
-                        g: 0.0,
-                        b: 0.0,
-                        a: 1.0,
-                    }),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &self.depth_texture_view,
-                depth_ops: Some(Operations {
-                    load: LoadOp::Clear(1.0),
-                    store: StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-
+    /// 描画を開始するメソッド。
+    pub fn start(&self, render_pass: &mut RenderPass<'_>) {
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.bind_group_0, &[]);
-        render_pass.set_bind_group(1, &self.bind_group_1, &[]);
+    }
 
+    /// モデルをセットするメソッド。
+    ///
+    /// WARN: このメソッドは描画開始後に・かつ必ず一度以上呼ぶべし。
+    pub fn set_model(&self, render_pass: &mut RenderPass<'_>, model: &model::Model) {
         render_pass.set_vertex_buffer(0, model.vertex_buffer.slice(..));
         render_pass.set_index_buffer(model.index_buffer.slice(..), IndexFormat::Uint16);
+    }
 
-        render_pass.draw_indexed(0..model.index_count as u32, 0, instances_range);
+    /// 描画を行うメソッド。
+    ///
+    /// WARN: このメソッドは描画開始後に呼ぶべし。
+    /// WARN: バインドグループが作成されていない場合、無視される。
+    /// WARN: インスタンスバッファを超過しているか否か、判定しない。
+    pub fn render<'a>(
+        &self,
+        render_pass: &mut RenderPass<'_>,
+        bind_group_id: &'static str,
+        model_index_count: u32,
+        instances_range: Range<u32>,
+    ) {
+        if let Some(n) = self.bind_group_1s.get(bind_group_id) {
+            render_pass.set_bind_group(1, n, &[]);
+        }
+        render_pass.draw_indexed(0..model_index_count, 0, instances_range);
     }
 }
