@@ -1,4 +1,5 @@
 pub mod graphic;
+pub mod input;
 pub mod resource;
 
 use crate::EError;
@@ -21,6 +22,7 @@ pub struct ApplicationInfo {
 /// クライアントはこのマネージャを叩いてゲームを表現する。
 pub struct Managers<'a> {
     pub gr_mngr: graphic::GraphicManager<'a>,
+    pub in_mngr: input::InputManager,
     pub rs_mngr: resource::ResourceManager,
 }
 
@@ -35,15 +37,20 @@ pub trait ClientHandler {
     fn update(&mut self, mngrs: &mut Managers, duration: Duration) -> bool;
 }
 
+/// アプリケーションのコアとなるオブジェクトの集合。
+struct ApplicationCore<'a, T> {
+    _window: Arc<Window>,
+    mngrs: Managers<'a>,
+    client: T,
+}
+
 /// winitベースウィンドウアプリケーションの構造体。
 struct Application<'a, T>
 where
     T: ClientHandler,
 {
     info: ApplicationInfo,
-    window: Option<Arc<Window>>,
-    mngrs: Option<Managers<'a>>,
-    client: Option<T>,
+    core: Option<ApplicationCore<'a, T>>,
     last: Instant,
 }
 
@@ -56,7 +63,7 @@ where
     /// ことWindows, macOS, Linuxにおいてはアプリケーション起動直後に一度だけ呼ばれる。
     /// そのため、アプリケーションに必要なすべてのオブジェクトを初期化する。
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_some() {
+        if self.core.is_some() {
             return;
         }
 
@@ -84,14 +91,21 @@ where
 
         let gr_mngr = graphic::GraphicManager::new(window.clone())
             .expect("failed to create a graphic manager.");
+        let in_mngr = input::InputManager::new();
         let rs_mngr = resource::ResourceManager::new();
-        let mut mngrs = Managers { gr_mngr, rs_mngr };
+        let mut mngrs = Managers {
+            gr_mngr,
+            in_mngr,
+            rs_mngr,
+        };
 
         let client = T::new(&mut mngrs);
 
-        self.window = Some(window);
-        self.mngrs = Some(mngrs);
-        self.client = Some(client);
+        self.core = Some(ApplicationCore {
+            _window: window,
+            mngrs,
+            client,
+        });
     }
 
     /// ウィンドウイベントを処理するメソッド。
@@ -99,11 +113,18 @@ where
     /// - ウィンドウ破棄イベント -> アプリケーション終了
     /// - キーボード入力イベント -> InputManager
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        if self.window.is_none() {
+        let Some(core) = &mut self.core else {
             return;
-        }
+        };
 
         match event {
+            WindowEvent::KeyboardInput {
+                device_id: _,
+                event,
+                is_synthetic: _,
+            } => {
+                core.mngrs.in_mngr.on_key_event_happened(event);
+            }
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Destroyed => event_loop.exit(),
             _ => (),
@@ -115,18 +136,18 @@ where
     /// つまり、アプリケーションのメインループ。
     /// クライアントの更新メソッドを呼ぶ。
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if self.window.is_none() {
+        let Some(core) = &mut self.core else {
             return;
-        }
-        if !self
-            .client
-            .as_mut()
-            .unwrap()
-            .update(self.mngrs.as_mut().unwrap(), self.last.elapsed())
-        {
+        };
+
+        let duration = self.last.elapsed();
+        self.last = Instant::now();
+
+        if !core.client.update(&mut core.mngrs, duration) {
             event_loop.exit();
         }
-        self.last = Instant::now();
+
+        core.mngrs.in_mngr.go_next();
     }
 }
 
@@ -141,9 +162,7 @@ where
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop.run_app(&mut Application::<T> {
         info,
-        window: None,
-        mngrs: None,
-        client: None,
+        core: None,
         last: Instant::now(),
     })?;
     Ok(())
