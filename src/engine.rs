@@ -84,7 +84,7 @@ where
 
         let gr_mngr = graphic::GraphicManager::new(window.clone())
             .expect("failed to create a graphic manager.");
-        let rs_mngr = resource::ResourceManager;
+        let rs_mngr = resource::ResourceManager::new();
         let mut mngrs = Managers { gr_mngr, rs_mngr };
 
         let client = T::new(&mut mngrs);

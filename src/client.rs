@@ -1,3 +1,4 @@
+mod component;
 mod scene;
 
 use crate::engine::{ClientHandler, Managers};

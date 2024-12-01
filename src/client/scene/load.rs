@@ -31,7 +31,7 @@ impl LoadScene {
 }
 
 impl SceneTrait for LoadScene {
-    fn update(&mut self, _: &mut Managers, _: Duration) -> NextScene {
-        Some(title::TitleScene::new())
+    fn update(&mut self, mngrs: &mut Managers, _: Duration) -> NextScene {
+        Some(title::TitleScene::new(mngrs))
     }
 }

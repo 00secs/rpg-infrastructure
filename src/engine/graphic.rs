@@ -1,3 +1,4 @@
+pub mod character;
 mod image;
 mod model;
 pub mod pipeline;
@@ -26,6 +27,7 @@ pub struct GraphicManager<'a> {
     square_model: model::Model,
     depth_texture_view: TextureView,
     image_texture_views: HashMap<&'static str, TextureView>,
+    char_images_texture_atlas: character::CharacterImagesTextureAtlas,
 }
 
 impl<'a> GraphicManager<'a> {
@@ -86,7 +88,7 @@ impl<'a> GraphicManager<'a> {
             },
         );
 
-        let base_pipeline = pipeline::BasePipeline::new(
+        let mut base_pipeline = pipeline::BasePipeline::new(
             &device,
             surface_format.into(),
             window.inner_size().width,
@@ -112,6 +114,16 @@ impl<'a> GraphicManager<'a> {
             })
             .create_view(&TextureViewDescriptor::default());
 
+        let mut image_texture_views = HashMap::new();
+
+        let char_images_texture_atlas =
+            character::CharacterImagesTextureAtlas::new(&device, &queue);
+        let char_images_texture_atlas_view = char_images_texture_atlas
+            .texture
+            .create_view(&TextureViewDescriptor::default());
+        base_pipeline.load_bind_group_for_image(&device, "chars", &char_images_texture_atlas_view);
+        image_texture_views.insert("chars", char_images_texture_atlas_view);
+
         Ok(Self {
             surface,
             device,
@@ -119,7 +131,8 @@ impl<'a> GraphicManager<'a> {
             base_pipeline,
             square_model,
             depth_texture_view,
-            image_texture_views: HashMap::new(),
+            image_texture_views,
+            char_images_texture_atlas,
         })
     }
 
@@ -146,6 +159,28 @@ impl<'a> GraphicManager<'a> {
             .load_bind_group_for_image(&self.device, id, &image_texture_view);
         self.image_texture_views.insert(id, image_texture_view);
         Ok(())
+    }
+
+    /// 文字画像をロードするメソッド。
+    ///
+    /// 既に文字画像がロードされている場合、無視される。
+    pub fn load_character_image(
+        &mut self,
+        rs_mngr: &mut ResourceManager,
+        font_name: &'static str,
+        character: char,
+    ) -> Result<bool, EError> {
+        self.char_images_texture_atlas
+            .load(rs_mngr, &self.queue, font_name, character)
+    }
+
+    /// 文字画像の情報を取得するメソッド。
+    pub fn get_character_image(
+        &self,
+        font_name: &'static str,
+        character: char,
+    ) -> Option<&character::CharacterImage> {
+        self.char_images_texture_atlas.get(font_name, character)
     }
 
     /// Baseレンダーパイプラインのカメラバッファを更新するメソッド。
