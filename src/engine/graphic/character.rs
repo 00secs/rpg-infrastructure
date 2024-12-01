@@ -12,10 +12,24 @@ const CHARACTER_IMAGES_ROW_COUNT: usize = (CHARS_TEXTURE_HEIGHT / CHARACTER_HEIG
 
 /// 文字画像の情報。
 pub struct CharacterImage {
+    /// CharacterImagesTextureAtlasで登録されているキー。
+    /// (フォント名, 文字)
     key: Key,
+    /// 文字画像のためのテクスチャアトラス上のUV座標。
     pub uv: Vec4,
+    /// 文字画像のためのテクスチャアトラス上の幅。
     pub width: f32,
+    /// 文字画像のためのテクスチャアトラス上の高さ。
     pub height: f32,
+    /// 文字画像のためのテクスチャアトラス上のスケールでのY座標のオフセット。
+    pub y_offset: f32,
+}
+impl CharacterImage {
+    /// heightを基準の高さにしたときの(幅,高さ,Y座標のオフセット)を取得するメソッド。
+    pub fn scale(&self, height: f32) -> (f32, f32, f32) {
+        let r = height / CHARACTER_HEIGHT as f32;
+        (self.width * r, self.height * r, self.y_offset * r)
+    }
 }
 
 /// 文字画像のためのテクスチャアトラスを管理するオブジェクト。
@@ -99,12 +113,11 @@ impl CharacterImagesTextureAtlas {
         }
 
         // 文字画像を取得
-        let (bitmap, width, height) =
-            rs_mngr.rasterize_character(font_name, character, CHARACTER_HEIGHT as f32)?;
+        let result = rs_mngr.rasterize_character(font_name, character, CHARACTER_HEIGHT as f32)?;
 
         // 右に行けない場合、行を移動して、移動先の行をクリア
         // クリアしたか否か、記憶
-        let cleared = if self.offset + width >= CHARS_TEXTURE_WIDTH {
+        let cleared = if self.offset + result.width >= CHARS_TEXTURE_WIDTH {
             self.offset = 0;
             if self.index + 1 >= CHARACTER_IMAGES_ROW_COUNT {
                 self.index = 0;
@@ -130,15 +143,15 @@ impl CharacterImagesTextureAtlas {
                 origin: Origin3d { x, y, z: 0 },
                 aspect: TextureAspect::All,
             },
-            &bitmap,
+            &result.texture,
             ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * width),
+                bytes_per_row: Some(4 * result.width),
                 rows_per_image: None,
             },
             Extent3d {
-                width: width,
-                height: height,
+                width: result.width,
+                height: result.height,
                 depth_or_array_layers: 1,
             },
         );
@@ -149,18 +162,19 @@ impl CharacterImagesTextureAtlas {
             uv: Vec4::new(
                 x as f32 / CHARS_TEXTURE_WIDTH as f32,
                 y as f32 / CHARS_TEXTURE_HEIGHT as f32,
-                width as f32 / CHARS_TEXTURE_WIDTH as f32,
-                height as f32 / CHARS_TEXTURE_HEIGHT as f32,
+                result.width as f32 / CHARS_TEXTURE_WIDTH as f32,
+                result.height as f32 / CHARS_TEXTURE_HEIGHT as f32,
             ),
-            width: width as f32,
-            height: height as f32,
+            width: result.width as f32,
+            height: result.height as f32,
+            y_offset: result.y_offset,
         };
         self.registered_characters.insert(
             (font_name, character),
             (self.index, self.character_images[self.index].len()),
         );
         self.character_images[self.index].push(character_image);
-        self.offset += width;
+        self.offset += result.width;
 
         Ok(cleared)
     }

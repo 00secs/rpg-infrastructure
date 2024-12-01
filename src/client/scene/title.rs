@@ -17,7 +17,7 @@ impl TitleScene {
         let text = Text::new(
             mngrs,
             "UtsukushiFONT.otf",
-            "aあ|".to_string(),
+            "fg_あ|".to_string(),
             Vec3::ZERO,
             24.0,
         );

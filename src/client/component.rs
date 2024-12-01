@@ -55,18 +55,18 @@ impl Text {
             let char_image = mngrs.gr_mngr.get_character_image(font_name, c).unwrap();
 
             // インスタンス作成
-            let width = height * char_image.width / char_image.height;
+            let (w, h, oy) = char_image.scale(height);
             instances.push(BaseInstance {
                 _world: Mat4::from_scale_rotation_translation(
-                    Vec3::new(width, height, 1.0),
+                    Vec3::new(w, h, 1.0),
                     Quat::IDENTITY,
-                    Vec3::new(pos.x + width / 2.0, pos.y - height / 2.0, pos.z),
+                    Vec3::new(pos.x + w / 2.0, pos.y - h / 2.0 - oy, pos.z),
                 ),
                 _tex_coord: char_image.uv,
             });
 
             // 右へシフト
-            pos.x += width;
+            pos.x += w;
         }
         Self { instances }
     }

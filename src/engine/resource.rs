@@ -3,6 +3,13 @@ use ab_glyph::*;
 use png::Decoder;
 use std::{collections::HashMap, fs::File, io::Read};
 
+pub struct CharacterRasterizedResult {
+    pub texture: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub y_offset: f32,
+}
+
 /// 外部リソースを管理するオブジェクト。
 //
 // NOTE: 将来的にリソースをすべて.datファイルにまとめて
@@ -35,7 +42,7 @@ impl ResourceManager {
         font_name: &str,
         character: char,
         height: f32,
-    ) -> Result<(Vec<u8>, u32, u32), EError> {
+    ) -> Result<CharacterRasterizedResult, EError> {
         // フォントを取得
         self.load_font(font_name)?;
         let font = &self.fonts[font_name].as_scaled(PxScale::from(height));
@@ -45,26 +52,21 @@ impl ResourceManager {
             .outline_glyph(font.scaled_glyph(character))
             .ok_or(format!("failed to outline {character}."))?;
 
-        // ビットマップ全体のサイズを取得
+        // ビットマップを作成
         let ww = outlined_glyph.px_bounds().width().ceil() as usize;
-        let wh = (font.ascent() + outlined_glyph.px_bounds().max.y).ceil() as usize;
-        let mut texture = vec![0; 4 * ww * wh];
-
-        // グリフ全体のオフセットを取得
-        let oy = (font.ascent() + outlined_glyph.px_bounds().min.y).floor() as usize;
+        let wh = outlined_glyph.px_bounds().height().ceil() as usize;
+        let mut texture = vec![0xff; 4 * ww * wh];
 
         // ラスタライズ
-        outlined_glyph.draw(|x, y, c| {
-            let x = x as usize;
-            let y = oy + y as usize;
-            let idx = 4 * ww * y + 4 * x;
-            texture[idx] = 0xff;
-            texture[idx + 1] = 0xff;
-            texture[idx + 2] = 0xff;
-            texture[idx + 3] = (c * 255.0) as u8;
-        });
+        outlined_glyph
+            .draw(|x, y, c| texture[4 * ww * y as usize + 4 * x as usize + 3] = (c * 255.0) as u8);
 
-        Ok((texture, ww as u32, wh as u32))
+        Ok(CharacterRasterizedResult {
+            texture,
+            width: ww as u32,
+            height: wh as u32,
+            y_offset: font.ascent() + outlined_glyph.px_bounds().min.y,
+        })
     }
 
     fn load_font(&mut self, font_name: &str) -> Result<(), EError> {
