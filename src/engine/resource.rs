@@ -48,9 +48,17 @@ impl ResourceManager {
         let font = &self.fonts[font_name].as_scaled(PxScale::from(height));
 
         // グリフを取得
-        let outlined_glyph = font
-            .outline_glyph(font.scaled_glyph(character))
-            .ok_or(format!("failed to outline {character}."))?;
+        let Some(outlined_glyph) = font.outline_glyph(font.scaled_glyph(character)) else {
+            let ww = font.h_advance(font.glyph_id(character)).ceil() as usize;
+            let wh = 2;
+            let texture: Vec<u8> = vec![0x00; 4 * ww * wh];
+            return Ok(CharacterRasterizedResult {
+                texture,
+                width: ww as u32,
+                height: wh as u32,
+                y_offset: 0.0,
+            });
+        };
 
         // ビットマップを作成
         let ww = outlined_glyph.px_bounds().width().ceil() as usize;

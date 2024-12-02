@@ -14,11 +14,13 @@ var<uniform> camera: Camera;
 
 struct Instance {
     world: mat4x4<f32>,
-    tex_coord: vec4<f32>,
+    uv: vec4<f32>,
+    color: vec4<f32>,
+    param: vec4<f32>,
 }
 @group(0)
 @binding(1)
-var<uniform> instances: array<Instance, 16>;
+var<uniform> instances: array<Instance, 512>;
 
 @group(1)
 @binding(0)
@@ -30,11 +32,12 @@ var image_sampler: sampler;
 
 struct VertexInput {
     @location(0) position: vec4<f32>,
-    @location(1) tex_coord: vec2<f32>,
+    @location(1) uv: vec2<f32>,
 }
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) tex_coord: vec2<f32>,
+    @location(0) uv: vec2<f32>,
+    @location(1) color: vec4<f32>,
 }
 
 @vertex
@@ -44,23 +47,27 @@ fn vs_main(
 ) -> VertexOutput {
     var result: VertexOutput;
 
-    result.position = camera.projection * camera.view * instances[instance_index].world * vertex_input.position;
+    result.position = camera.projection
+        * instances[instance_index].world
+        * vertex_input.position;
 
-    result.tex_coord = vec2<f32>(
-        instances[instance_index].tex_coord.x + instances[instance_index].tex_coord.z * vertex_input.tex_coord.x,
-        instances[instance_index].tex_coord.y + instances[instance_index].tex_coord.w * vertex_input.tex_coord.y,
+    result.uv = vec2<f32>(
+        instances[instance_index].uv.x + instances[instance_index].uv.z * vertex_input.uv.x,
+        instances[instance_index].uv.y + instances[instance_index].uv.w * vertex_input.uv.y,
     );
+
+    result.color = instances[instance_index].color;
 
     return result;
 }
 
 @fragment
-fn fs_main(vertex_outout: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(image_texture, image_sampler, vertex_outout.tex_coord);
+fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
+    return textureSample(image_texture, image_sampler, vertex_output.uv) * vertex_output.color;
 }
 ";
 
-const MAX_INSTANCE_COUNT: u32 = 16;
+const MAX_INSTANCE_COUNT: u32 = 512;
 
 /// カメラの構造体。
 pub struct Camera {
@@ -72,7 +79,9 @@ pub struct Camera {
 #[derive(Clone)]
 pub struct Instance {
     pub _world: Mat4,
-    pub _tex_coord: Vec4,
+    pub _uv: Vec4,
+    pub _color: Vec4,
+    pub _param: Vec4,
 }
 
 /// 普通のレンダーパイプライン。
@@ -242,7 +251,9 @@ impl BasePipeline {
             .into_iter()
             .map(|_| Instance {
                 _world: Mat4::IDENTITY,
-                _tex_coord: Vec4::new(0.0, 0.0, 1.0, 1.0),
+                _uv: Vec4::new(0.0, 0.0, 1.0, 1.0),
+                _color: Vec4::new(1.0, 1.0, 1.0, 1.0),
+                _param: Vec4::ZERO,
             })
             .collect::<Vec<Instance>>();
         let instance_buffer = device.create_buffer_init(&BufferInitDescriptor {
@@ -336,7 +347,7 @@ impl BasePipeline {
     pub fn update_instances(&self, queue: &Queue, offset: u32, instances: &[Instance]) {
         queue.write_buffer(
             &self.instance_buffer,
-            offset as u64,
+            mem::size_of::<Instance>() as u64 * offset as u64,
             slice_to_u8slice(instances),
         );
     }

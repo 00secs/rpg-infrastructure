@@ -11,6 +11,7 @@ const CHARACTER_HEIGHT: u32 = 24;
 const CHARACTER_IMAGES_ROW_COUNT: usize = (CHARS_TEXTURE_HEIGHT / CHARACTER_HEIGHT) as usize;
 
 /// 文字画像の情報。
+#[derive(Clone)]
 pub struct CharacterImage {
     /// CharacterImagesTextureAtlasで登録されているキー。
     /// (フォント名, 文字)
