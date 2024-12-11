@@ -47,7 +47,14 @@ fn vs_main(
 ) -> VertexOutput {
     var result: VertexOutput;
 
+    let identity: mat4x4<f32> = mat4x4<f32>(
+        vec4<f32>(1.0, 0.0, 0.0, 0.0),
+        vec4<f32>(0.0, 1.0, 0.0, 0.0),
+        vec4<f32>(0.0, 0.0, 1.0, 0.0),
+        vec4<f32>(0.0, 0.0, 0.0, 1.0)
+    );
     result.position = camera.projection
+        * ((1.0 - instances[instance_index].param.x) * camera.view + instances[instance_index].param.x * identity)
         * instances[instance_index].world
         * vertex_input.position;
 

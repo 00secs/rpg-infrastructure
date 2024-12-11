@@ -5,9 +5,21 @@ pub mod pipeline;
 
 use crate::{engine::resource::ResourceManager, EError};
 use futures::executor;
-use std::{collections::HashMap, ops::Range, sync::Arc};
+use std::{cmp::Ordering, collections::HashMap, ops::Range, sync::Arc};
+use uuid::Uuid;
 use wgpu::*;
 use winit::window::Window;
+
+/// Baseレンダーパイプラインのインスタンスデータ及びそのメタ情報の集合体。
+///
+/// メタ情報は半透明オブジェクトを正確に描画するため・効率良くインスタンシングを行うためのソートに用いる。
+pub struct InstanceMeta {
+    pub instance: pipeline::BaseInstance,
+    pub uuid: Uuid,
+    pub updated: bool,
+    pub image_id: &'static str,
+    pub depth: f32,
+}
 
 /// 1回のインスタンシングに必要なデータの集合体。
 pub struct RenderCommand {
@@ -28,6 +40,7 @@ pub struct GraphicManager<'a> {
     depth_texture_view: TextureView,
     image_texture_views: HashMap<&'static str, TextureView>,
     char_images_texture_atlas: character::CharacterImagesTextureAtlas,
+    uuids: Vec<Uuid>,
 }
 
 impl<'a> GraphicManager<'a> {
@@ -133,6 +146,7 @@ impl<'a> GraphicManager<'a> {
             depth_texture_view,
             image_texture_views,
             char_images_texture_atlas,
+            uuids: Vec::new(),
         })
     }
 
@@ -255,5 +269,80 @@ impl<'a> GraphicManager<'a> {
         render_pass.forget_lifetime();
         self.queue.submit(Some(command_encoder.finish()));
         surface_texture.present();
+    }
+
+    /// メタ情報を元に自動的に効率良く描画を行うメソッド。
+    ///
+    /// 垂直同期を取るため、スレッドが待機される。
+    pub fn render_with_metas(&mut self, mut metas: Vec<InstanceMeta>) {
+        // 空であれば早期リターン
+        if metas.is_empty() {
+            // TODO: 1フレーム待機
+            return;
+        }
+
+        // ソート
+        // - 深度値降順に並べる
+        // - 深度値が同じ場合、画像リソース名が大きい順に並べる
+        metas.sort_by(|a, b| {
+            b.depth
+                .partial_cmp(&a.depth)
+                .unwrap_or(Ordering::Equal)
+                .then_with(|| b.image_id.cmp(&a.image_id))
+        });
+
+        // 描画情報を取得
+        let length = metas.len() as u32;
+        let mut uuids = Vec::new();
+        let mut instancess = Vec::new();
+        let mut commands = Vec::new();
+        let mut current_instances = Vec::new();
+        let mut current_image_id = metas[0].image_id;
+        let mut current_depth = metas[0].depth;
+        let mut offset = 0;
+        let mut start = 0;
+        for (i, n) in metas.into_iter().enumerate() {
+            uuids.push(n.uuid);
+
+            // 更新必要性がある場合または前回に比べてUUIDが一致しない場合は追加
+            if n.updated || &n.uuid != self.uuids.get(i).unwrap_or(&Uuid::default()) {
+                if current_instances.is_empty() {
+                    offset = i as u32;
+                }
+                current_instances.push(n.instance);
+            }
+            // 追加しない場合かつ更新必要性のあるインスタンスが溜まっている場合は更新を要求する必要がある
+            else if !current_instances.is_empty() {
+                instancess.push((offset, current_instances.clone()));
+                current_instances.clear();
+            }
+
+            // 画像リソース名が異なる場合または深度値が異なる場合はインスタンシングを分ける
+            if n.image_id != current_image_id || n.depth < current_depth {
+                commands.push(RenderCommand {
+                    image_id: current_image_id,
+                    instances_range: start..i as u32,
+                });
+                current_image_id = n.image_id;
+                current_depth = n.depth;
+                start = i as u32;
+            }
+        }
+        if !current_instances.is_empty() {
+            instancess.push((offset, current_instances));
+        }
+        commands.push(RenderCommand {
+            image_id: current_image_id,
+            instances_range: start..length,
+        });
+        self.uuids = uuids;
+
+        // インスタンスバッファを更新
+        for (o, n) in instancess {
+            self.update_instances(o, &n);
+        }
+
+        // 描画
+        self.render(&commands);
     }
 }

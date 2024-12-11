@@ -80,7 +80,7 @@ where
         let window_attributes = Window::default_attributes()
             .with_title(self.info.title)
             .with_resizable(false)
-            .with_inner_size(LogicalSize::new(self.info.width, self.info.height))
+            .with_inner_size(PhysicalSize::new(self.info.width, self.info.height))
             .with_fullscreen(fullscreen);
         let window = event_loop
             .create_window(window_attributes)

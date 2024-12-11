@@ -1,5 +1,6 @@
 use super::*;
-use crate::{client::component::*, engine::graphic::RenderCommand, *};
+
+use crate::{client::component::*, *};
 use glam::*;
 
 pub struct LoadScene;
@@ -10,16 +11,12 @@ impl LoadScene {
         let _ = mngrs.gr_mngr.load_image(&mngrs.rs_mngr, "load");
 
         // ロード画面描画
-        let bg = Sprite::new()
-            .set_scl(Vec2::new(SCENE_WIDTH, SCENE_HEIGHT))
-            .set_uv(Vec4::new(0.0, 0.0, 1.0, 0.5625));
         let mut instances = Vec::new();
-        bg.push_to(&mut instances);
-        mngrs.gr_mngr.update_instances(0, &instances);
-        mngrs.gr_mngr.render(&[RenderCommand {
-            image_id: "load",
-            instances_range: 0..1,
-        }]);
+        Sprite::new("load")
+            .with_scl(Vec2::new(SCENE_WIDTH, SCENE_HEIGHT))
+            .with_uv(Vec4::new(0.0, 0.0, 1.0, 0.5625))
+            .push_to(&mut instances);
+        mngrs.gr_mngr.render_with_metas(instances);
 
         Box::new(Self)
     }
