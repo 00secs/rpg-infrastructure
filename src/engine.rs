@@ -22,8 +22,10 @@ fn slice_to_u8slice<T>(a: &[T]) -> &[u8] {
 /// アプリケーションの基本情報。
 pub struct ApplicationInfo {
     pub title: &'static str,
-    pub width: f32,
-    pub height: f32,
+    pub scene_width: u32,
+    pub scene_height: u32,
+    pub window_width: f32,
+    pub window_height: f32,
     pub is_fullscreen: bool,
 }
 
@@ -89,7 +91,10 @@ where
         let window_attributes = Window::default_attributes()
             .with_title(self.info.title)
             .with_resizable(false)
-            .with_inner_size(PhysicalSize::new(self.info.width, self.info.height))
+            .with_inner_size(LogicalSize::new(
+                self.info.window_width,
+                self.info.window_height,
+            ))
             .with_fullscreen(fullscreen);
         let window = event_loop
             .create_window(window_attributes)
@@ -98,8 +103,12 @@ where
 
         let window = Arc::new(window);
 
-        let gr_mngr = graphic::GraphicManager::new(window.clone())
-            .expect("failed to create a graphic manager.");
+        let gr_mngr = graphic::GraphicManager::new(
+            window.clone(),
+            self.info.scene_width,
+            self.info.scene_height,
+        )
+        .expect("failed to create a graphic manager.");
         let in_mngr = input::InputManager::new();
         let rs_mngr = resource::ResourceManager::new();
         let mut mngrs = Managers {

@@ -46,7 +46,7 @@ pub struct GraphicManager<'a> {
 }
 
 impl<'a> GraphicManager<'a> {
-    pub fn new(window: Arc<Window>) -> Result<Self, EError> {
+    pub fn new(window: Arc<Window>, width: u32, height: u32) -> Result<Self, EError> {
         let backends = if cfg!(target_os = "windows") {
             Backends::DX12
         } else if cfg!(target_os = "macos") {
@@ -94,8 +94,8 @@ impl<'a> GraphicManager<'a> {
             &SurfaceConfiguration {
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 format: surface_format,
-                width: window.inner_size().width,
-                height: window.inner_size().height,
+                width,
+                height,
                 present_mode: PresentMode::AutoVsync,
                 view_formats: Vec::new(),
                 alpha_mode: surface_capabilities.alpha_modes[0],
@@ -103,12 +103,8 @@ impl<'a> GraphicManager<'a> {
             },
         );
 
-        let mut base_pipeline = pipeline::BasePipeline::new(
-            &device,
-            surface_format.into(),
-            window.inner_size().width,
-            window.inner_size().height,
-        );
+        let mut base_pipeline =
+            pipeline::BasePipeline::new(&device, surface_format.into(), width, height);
 
         let square_model = model::create_square_model(&device);
 
@@ -116,8 +112,8 @@ impl<'a> GraphicManager<'a> {
             .create_texture(&TextureDescriptor {
                 label: None,
                 size: Extent3d {
-                    width: window.inner_size().width,
-                    height: window.inner_size().height,
+                    width,
+                    height,
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
