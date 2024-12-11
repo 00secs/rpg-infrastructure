@@ -1,4 +1,6 @@
-use crate::{engine::resource::ResourceManager, EError};
+use super::*;
+
+use crate::engine::resource::ResourceManager;
 use glam::Vec4;
 use std::collections::HashMap;
 use wgpu::*;

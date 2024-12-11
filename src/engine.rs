@@ -2,12 +2,22 @@ pub mod graphic;
 pub mod input;
 pub mod resource;
 
-use crate::EError;
 use std::{
+    mem, slice,
     sync::Arc,
     time::{Duration, Instant},
 };
 use winit::{application::*, dpi::*, event::*, event_loop::*, window::*};
+
+type EError = Box<dyn std::error::Error>;
+
+fn anything_to_u8slice<T>(a: &T) -> &[u8] {
+    unsafe { slice::from_raw_parts((a as *const T).cast::<u8>(), mem::size_of::<T>()) }
+}
+
+fn slice_to_u8slice<T>(a: &[T]) -> &[u8] {
+    unsafe { slice::from_raw_parts(a.as_ptr().cast::<u8>(), mem::size_of::<T>() * a.len()) }
+}
 
 /// アプリケーションの基本情報。
 pub struct ApplicationInfo {
@@ -30,7 +40,6 @@ pub struct Managers<'a> {
 pub trait ClientHandler {
     /// クライアントコンストラクタ。
     fn new(mngrs: &mut Managers) -> Self;
-
     /// クライアント更新メソッド。
     ///
     /// アプリケーションを続行する場合true、終了する場合falseを返す。
