@@ -2,6 +2,7 @@ use super::*;
 
 /// マップシーンで使われるコンポーネントの集合体。
 pub struct Components {
+    pub camera: Camera,
     pub map_tiles: MapTiles,
     pub player: Actor,
     pub actors: Vec<Actor>,

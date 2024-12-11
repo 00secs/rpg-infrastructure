@@ -5,7 +5,6 @@ use glam::*;
 use winit::keyboard::KeyCode;
 
 pub struct MapScene {
-    camera: Camera,
     coms: Components,
     events: Vec<Event>,
 }
@@ -39,6 +38,7 @@ impl MapScene {
         );
 
         let coms = Components {
+            camera,
             map_tiles,
             player,
             actors: Vec::new(),
@@ -49,11 +49,7 @@ impl MapScene {
         events.push(message_event);
         events.push(move_player_event);
 
-        Self {
-            camera,
-            coms,
-            events,
-        }
+        Self { coms, events }
     }
 }
 
@@ -69,8 +65,7 @@ impl SceneTrait for MapScene {
         self.events = events;
 
         // カメラバッファを更新
-        self.camera.chase(self.coms.player.get_position());
-        mngrs.gr_mngr.update_camera(&self.camera.buffer);
+        mngrs.gr_mngr.update_camera(&self.coms.camera.get());
 
         // 描画
         let mut instances = Vec::new();
@@ -113,6 +108,7 @@ fn move_player_event(mngrs: &mut Managers, coms: &mut Components, duration: Dura
     // プレイヤーが移動開始不可であれば移動して早期リターン
     if !coms.player.can_start_move() {
         coms.player.update(duration);
+        coms.camera.chase(coms.player.get_position());
         return true;
     }
 
@@ -136,6 +132,7 @@ fn move_player_event(mngrs: &mut Managers, coms: &mut Components, duration: Dura
     // 新しく入力された方向がないなら移動して早期リターン
     let Some((di, dj, direction)) = recent_input else {
         coms.player.update(duration);
+        coms.camera.chase(coms.player.get_position());
         return true;
     };
 
@@ -158,6 +155,7 @@ fn move_player_event(mngrs: &mut Managers, coms: &mut Components, duration: Dura
 
     // 移動
     coms.player.update(duration);
+    coms.camera.chase(coms.player.get_position());
 
     return true;
 }

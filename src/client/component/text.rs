@@ -135,7 +135,7 @@ impl Text {
                     _world: Mat4::from_scale_rotation_translation(
                         Vec3::new(w, h, 1.0),
                         Quat::IDENTITY,
-                        Vec3::new(pos.x + w / 2.0, pos.y - h / 2.0 - oy, pos.z)
+                        Vec3::new(pos.x + w / 2.0, pos.y - h / 2.0 - oy, pos.z),
                     ),
                     _uv: n.uv,
                     _color: self.col,

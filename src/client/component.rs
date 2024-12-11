@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 mod actor;
+mod camera;
 mod components;
 mod maptile;
 mod message;
@@ -9,6 +10,7 @@ mod sprite;
 mod text;
 
 pub use actor::*;
+pub use camera::*;
 pub use components::*;
 pub use maptile::*;
 pub use message::*;
@@ -54,37 +56,4 @@ pub enum CoordinateSystem {
 pub enum Alignment {
     Center,
     TopLeft,
-}
-
-/// カメラ。
-pub struct Camera {
-    pub buffer: BaseCamera,
-}
-
-impl Camera {
-    pub fn new() -> Self {
-        Self {
-            buffer: BaseCamera {
-                _projection: Mat4::orthographic_lh(
-                    -SCENE_WIDTH / 2.0,
-                    SCENE_WIDTH / 2.0,
-                    -SCENE_HEIGHT / 2.0,
-                    SCENE_HEIGHT / 2.0,
-                    0.0,
-                    100.0,
-                ),
-                _view: Mat4::IDENTITY,
-            },
-        }
-    }
-
-    /// 座標posにある物体の真上に移動するメソッド。
-    ///
-    /// WARN: posのz座標は無視される。
-    pub fn chase(&mut self, mut pos: Vec3) {
-        pos.x *= -1.0;
-        pos.y *= -1.0;
-        pos.z = 0.0;
-        self.buffer._view = Mat4::from_translation(pos);
-    }
 }

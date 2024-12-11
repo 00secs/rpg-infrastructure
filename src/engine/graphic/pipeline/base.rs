@@ -77,6 +77,7 @@ fn fs_main(vertex_output: VertexOutput) -> @location(0) vec4<f32> {
 const MAX_INSTANCE_COUNT: u32 = 512;
 
 /// カメラの構造体。
+#[derive(Clone)]
 pub struct Camera {
     pub _projection: Mat4,
     pub _view: Mat4,
