@@ -3,6 +3,7 @@ use super::*;
 use crate::{client::component::*, *};
 use glam::*;
 use map::MapScene;
+use std::collections::HashSet;
 use std::f32;
 use winit::keyboard::KeyCode;
 
@@ -30,7 +31,6 @@ impl TitleScene {
             .with_coods(CoordinateSystem::Canvas)
             .with_align(Alignment::TopLeft);
         let text = Text::new(
-            mngrs,
             "UtsukushiFONT.otf",
             "PRESS Z KEY TO START".to_string(),
             24.0,
@@ -63,11 +63,18 @@ impl SceneTrait for TitleScene {
             (f32::consts::PI * self.total_time / 2.0).cos().abs(),
         ));
 
+        // すべての文字画像をロード
+        let mut chars = HashSet::new();
+        self.text.collect_characters(&mut chars);
+        let should_push_text = mngrs
+            .gr_mngr
+            .load_all_character_images(&mut mngrs.rs_mngr, chars);
+
         // 描画
         let mut instances = Vec::new();
         self.bg.push_to(&mut instances);
         self.logo.push_to(&mut instances);
-        self.text.push_to(&mut instances);
+        self.text.push_to(&mut instances, mngrs, should_push_text);
         mngrs.gr_mngr.render_with_metas(instances);
 
         self.total_time += duration.as_secs_f32();

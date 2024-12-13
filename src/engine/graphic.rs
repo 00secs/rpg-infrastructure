@@ -7,7 +7,12 @@ pub mod pipeline;
 
 use crate::engine::resource::ResourceManager;
 use futures::executor;
-use std::{cmp::Ordering, collections::HashMap, ops::Range, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    ops::Range,
+    sync::Arc,
+};
 use uuid::Uuid;
 use wgpu::*;
 use winit::window::Window;
@@ -184,6 +189,31 @@ impl<'a> GraphicManager<'a> {
     ) -> Result<bool, EError> {
         self.char_images_texture_atlas
             .load(rs_mngr, &self.queue, font_name, character)
+    }
+
+    /// すべての文字画像をロードするメソッド。
+    ///
+    /// WARN: ロードに失敗した文字は無視される。
+    pub fn load_all_character_images(
+        &mut self,
+        rs_mngr: &mut ResourceManager,
+        characters: HashSet<(&'static str, char)>,
+    ) -> bool {
+        let mut cleared = false;
+        'outer: loop {
+            for c in &characters {
+                match self.load_character_image(rs_mngr, c.0, c.1) {
+                    Ok(true) => {
+                        cleared = true;
+                        continue 'outer;
+                    }
+                    Ok(false) => (),
+                    Err(_) => continue,
+                }
+            }
+            break;
+        }
+        cleared
     }
 
     /// 文字画像の情報を取得するメソッド。

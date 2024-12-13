@@ -1,5 +1,7 @@
 use super::*;
 
+use std::collections::HashSet;
+
 /// メッセージボックス。
 pub struct MessageBox {
     sprite: Sprite,
@@ -22,14 +24,8 @@ impl MessageBox {
         }
     }
 
-    pub fn set_message(
-        &mut self,
-        mngrs: &mut Managers,
-        font_name: &'static str,
-        message: String,
-        height: f32,
-    ) {
-        let message = Text::new(mngrs, font_name, message, height).with_pos(Vec3::new(
+    pub fn set_message(&mut self, font_name: &'static str, message: String, height: f32) {
+        let message = Text::new(font_name, message, height).with_pos(Vec3::new(
             48.0,
             SCENE_HEIGHT * 0.70 + 48.0,
             40.0,
@@ -37,10 +33,21 @@ impl MessageBox {
         self.message = Some(message);
     }
 
-    pub fn push_to(&mut self, instances: &mut Vec<InstanceMeta>) {
+    pub fn collect_characters(&self, chars: &mut HashSet<(&'static str, char)>) {
+        if let Some(n) = &self.message {
+            n.collect_characters(chars);
+        }
+    }
+
+    pub fn push_to(
+        &mut self,
+        instances: &mut Vec<InstanceMeta>,
+        mngrs: &Managers,
+        should_push_text: bool,
+    ) {
         self.sprite.push_to(instances);
         if let Some(message) = &mut self.message {
-            message.push_to(instances);
+            message.push_to(instances, mngrs, should_push_text);
         }
     }
 }

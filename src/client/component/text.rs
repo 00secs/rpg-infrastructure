@@ -1,17 +1,18 @@
 use super::*;
 
-use character::CharacterImage;
+use std::collections::HashSet;
 
 /// 文字列コンポーネント。
 pub struct Text {
-    char_images: Vec<(CharacterImage, Uuid)>,
+    uuids: Vec<Uuid>,
+    font_name: &'static str,
+    text: String,
+    height: f32,
     pos: Vec3,
     col: Vec4,
     param: Vec4,
     coords: CoordinateSystem,
     align: Alignment,
-    width: f32,
-    height: f32,
     should_push: bool,
 }
 
@@ -24,41 +25,18 @@ impl Text {
     /// - UIか：はい
     /// - 座標系：キャンバス座標系
     /// - アラインメント：左上詰め
-    pub fn new(mngrs: &mut Managers, font_name: &'static str, text: String, height: f32) -> Self {
-        let mut width = 0.0;
-        let mut char_images = Vec::new();
-        for c in text.chars() {
-            // 文字画像をロード
-            // WARN: 文字画像のロードに失敗した場合、文字がスキップされる。
-            // TODO: クリアに対応する
-            if mngrs
-                .gr_mngr
-                .load_character_image(&mut mngrs.rs_mngr, font_name, c)
-                .is_err()
-            {
-                continue;
-            }
-            // 文字画像情報を取得
-            let char_image = mngrs
-                .gr_mngr
-                .get_character_image(font_name, c)
-                .unwrap()
-                .clone();
-            // 幅を取得
-            let (w, _, _) = char_image.scale(height);
-            // 終了
-            width += w;
-            char_images.push((char_image, Uuid::new_v4()));
-        }
+    pub fn new(font_name: &'static str, text: String, height: f32) -> Self {
+        let uuids = (0..text.chars().count()).map(|_| Uuid::new_v4()).collect();
         Self {
-            char_images,
+            uuids,
+            font_name,
+            text,
+            height,
             pos: Vec3::ZERO,
             col: Vec4::new(1.0, 1.0, 1.0, 1.0),
             param: Vec4::new(1.0, 0.0, 0.0, 0.0),
             coords: CoordinateSystem::Canvas,
             align: Alignment::TopLeft,
-            width,
-            height,
             should_push: true,
         }
     }
@@ -106,8 +84,29 @@ impl Text {
         self.set_align(align);
         self
     }
-    pub fn push_to(&mut self, instances: &mut Vec<InstanceMeta>) {
-        if self.char_images.is_empty() {
+    pub fn collect_characters(&self, chars: &mut HashSet<(&'static str, char)>) {
+        self.text.chars().for_each(|c| {
+            chars.insert((self.font_name, c));
+        });
+    }
+    pub fn push_to(
+        &mut self,
+        instances: &mut Vec<InstanceMeta>,
+        mngrs: &Managers,
+        should_push_text: bool,
+    ) {
+        let mut width = 0.0;
+        let mut char_images = Vec::with_capacity(self.text.chars().count());
+        for c in self.text.chars() {
+            // WARN: 文字画像の情報を取得できなかった場合、その文字はスキップされる。
+            if let Some(n) = mngrs.gr_mngr.get_character_image(self.font_name, c) {
+                let (w, _, _) = n.scale(self.height);
+                width += w;
+                char_images.push(n);
+            }
+        }
+
+        if char_images.is_empty() {
             return;
         }
 
@@ -120,15 +119,15 @@ impl Text {
             ),
         };
         match self.align {
-            Alignment::Center => pos.x -= self.width / 2.0,
+            Alignment::Center => pos.x -= width / 2.0,
             Alignment::TopLeft => {
-                let (w, _, _) = self.char_images[0].0.scale(self.height);
+                let (w, _, _) = char_images[0].scale(self.height);
                 pos.x += w / 2.0;
                 pos.y -= self.height / 2.0;
             }
         };
 
-        for (n, uuid) in &self.char_images {
+        for (i, n) in char_images.iter().enumerate() {
             let (w, h, oy) = n.scale(self.height);
             instances.push(InstanceMeta {
                 instance: BaseInstance {
@@ -141,8 +140,8 @@ impl Text {
                     _color: self.col,
                     _param: self.param,
                 },
-                uuid: uuid.clone(),
-                updated: self.should_push,
+                uuid: self.uuids[i],
+                updated: self.should_push || should_push_text,
                 image_id: "chars",
                 depth: pos.z,
             });

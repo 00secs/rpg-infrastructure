@@ -21,11 +21,11 @@ pub struct CharacterImage {
     /// 文字画像のためのテクスチャアトラス上のUV座標。
     pub uv: Vec4,
     /// 文字画像のためのテクスチャアトラス上の幅。
-    pub width: f32,
+    width: f32,
     /// 文字画像のためのテクスチャアトラス上の高さ。
-    pub height: f32,
+    height: f32,
     /// 文字画像のためのテクスチャアトラス上のスケールでのY座標のオフセット。
-    pub y_offset: f32,
+    y_offset: f32,
 }
 impl CharacterImage {
     /// heightを基準の高さにしたときの(幅,高さ,Y座標のオフセット)を取得するメソッド。

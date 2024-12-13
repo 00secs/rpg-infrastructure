@@ -2,6 +2,7 @@ use super::*;
 
 use crate::client::component::*;
 use glam::*;
+use std::collections::HashSet;
 use winit::keyboard::KeyCode;
 
 pub struct MapScene {
@@ -67,9 +68,16 @@ impl SceneTrait for MapScene {
         // カメラバッファを更新
         mngrs.gr_mngr.update_camera(&self.coms.camera.get());
 
+        // 文字画像をすべてロード
+        let mut chars = HashSet::new();
+        self.coms.collect_characters(&mut chars);
+        let should_push_text = mngrs
+            .gr_mngr
+            .load_all_character_images(&mut mngrs.rs_mngr, chars);
+
         // 描画
         let mut instances = Vec::new();
-        self.coms.push_to(&mut instances);
+        self.coms.push_to(&mut instances, mngrs, should_push_text);
         mngrs.gr_mngr.render_with_metas(instances);
 
         // 終了
@@ -81,12 +89,7 @@ impl SceneTrait for MapScene {
 fn message_event(mngrs: &mut Managers, coms: &mut Components, _: Duration) -> bool {
     if coms.message_box.is_none() {
         let mut message_box = MessageBox::new("uis", Vec4::new(0.0, 0.0, 1.0, 1.0));
-        message_box.set_message(
-            mngrs,
-            "UtsukushiFONT.otf",
-            "メッセージです".to_string(),
-            24.0,
-        );
+        message_box.set_message("UtsukushiFONT.otf", "メッセージです".to_string(), 24.0);
         coms.message_box = Some(message_box);
     }
 
