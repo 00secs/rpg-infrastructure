@@ -161,6 +161,19 @@ where
         let duration = self.last.elapsed();
         self.last = Instant::now();
 
+        #[cfg(debug_assertions)]
+        {
+            use std::io::Write;
+            let mut stdout = std::io::stdout();
+            write!(stdout, "\x1B[2J\x1B[H").unwrap();
+            stdout.flush().unwrap();
+            println!(
+                "duration: {:.1} ms ({:.1} fps)",
+                duration.as_secs_f32() * 1000.0,
+                1.0 / duration.as_secs_f32(),
+            );
+        }
+
         if !core.client.update(&mut core.mngrs, duration) {
             event_loop.exit();
         }

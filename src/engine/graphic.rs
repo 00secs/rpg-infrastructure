@@ -365,6 +365,12 @@ impl<'a> GraphicManager<'a> {
         });
         self.uuids = uuids;
 
+        #[cfg(debug_assertions)]
+        {
+            println!("update: {} blocks", instancess.len());
+            println!("draw call: {}", commands.len());
+        }
+
         // インスタンスバッファを更新
         for (o, n) in instancess {
             self.update_instances(o, &n);
