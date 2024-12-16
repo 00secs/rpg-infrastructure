@@ -94,7 +94,7 @@ pub struct Instance {
 
 /// 普通のレンダーパイプライン。
 ///
-/// - 深度テストあり
+/// - 深度テストなし
 /// - アルファブレンディングあり
 /// - 拡大/縮小ともにアンチエイリアシングなし
 pub struct BasePipeline {
@@ -211,22 +211,7 @@ impl BasePipeline {
                 })],
             }),
             primitive: PrimitiveState::default(),
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Less,
-                stencil: StencilState {
-                    front: StencilFaceState::IGNORE,
-                    back: StencilFaceState::IGNORE,
-                    read_mask: 0,
-                    write_mask: 0,
-                },
-                bias: DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            }),
+            depth_stencil: None,
             multisample: MultisampleState::default(),
             multiview: None,
             cache: None,

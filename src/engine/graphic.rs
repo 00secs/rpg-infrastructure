@@ -44,7 +44,6 @@ pub struct GraphicManager<'a> {
     queue: Queue,
     base_pipeline: pipeline::BasePipeline,
     square_model: model::Model,
-    depth_texture_view: TextureView,
     image_texture_views: HashMap<&'static str, TextureView>,
     char_images_texture_atlas: character::CharacterImagesTextureAtlas,
     uuids: Vec<Uuid>,
@@ -113,23 +112,6 @@ impl<'a> GraphicManager<'a> {
 
         let square_model = model::create_square_model(&device);
 
-        let depth_texture_view = device
-            .create_texture(&TextureDescriptor {
-                label: None,
-                size: Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: TextureDimension::D2,
-                format: TextureFormat::Depth32Float,
-                usage: TextureUsages::RENDER_ATTACHMENT,
-                view_formats: &[],
-            })
-            .create_view(&TextureViewDescriptor::default());
-
         let mut image_texture_views = HashMap::new();
 
         let char_images_texture_atlas =
@@ -146,7 +128,6 @@ impl<'a> GraphicManager<'a> {
             queue,
             base_pipeline,
             square_model,
-            depth_texture_view,
             image_texture_views,
             char_images_texture_atlas,
             uuids: Vec::new(),
@@ -269,14 +250,7 @@ impl<'a> GraphicManager<'a> {
                     store: StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
-                view: &self.depth_texture_view,
-                depth_ops: Some(Operations {
-                    load: LoadOp::Clear(1.0),
-                    store: StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
+            depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         });
