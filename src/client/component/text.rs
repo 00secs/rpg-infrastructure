@@ -100,7 +100,7 @@ impl Text {
         for c in self.text.chars() {
             // WARN: 文字画像の情報を取得できなかった場合、その文字はスキップされる。
             if let Some(n) = mngrs.gr_mngr.get_character_image(self.font_name, c) {
-                let (w, _, _) = n.scale(self.height);
+                let (w, _, _, _, _) = n.scale(self.height);
                 width += w;
                 char_images.push(n);
             }
@@ -121,20 +121,20 @@ impl Text {
         match self.align {
             Alignment::Center => pos.x -= width / 2.0,
             Alignment::TopLeft => {
-                let (w, _, _) = char_images[0].scale(self.height);
+                let (w, _, _, _, _) = char_images[0].scale(self.height);
                 pos.x += w / 2.0;
                 pos.y -= self.height / 2.0;
             }
         };
 
         for (i, n) in char_images.iter().enumerate() {
-            let (w, h, oy) = n.scale(self.height);
+            let (w, h, ox, oy, ad) = n.scale(self.height);
             instances.push(InstanceMeta {
                 instance: BaseInstance {
                     _world: Mat4::from_scale_rotation_translation(
                         Vec3::new(w, h, 1.0),
                         Quat::IDENTITY,
-                        Vec3::new(pos.x + w / 2.0, pos.y - h / 2.0 - oy, pos.z),
+                        Vec3::new(pos.x + w / 2.0 + ox, pos.y - h / 2.0 - oy, pos.z),
                     ),
                     _uv: n.uv,
                     _color: self.col,
@@ -145,7 +145,7 @@ impl Text {
                 image_id: "chars",
                 depth: pos.z,
             });
-            pos.x += w;
+            pos.x += ad;
         }
 
         self.should_push = false;

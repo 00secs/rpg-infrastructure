@@ -8,7 +8,9 @@ pub struct CharacterRasterizedResult {
     pub texture: Vec<u8>,
     pub width: u32,
     pub height: u32,
+    pub x_offset: f32,
     pub y_offset: f32,
+    pub advance: f32,
 }
 
 /// 外部リソースを管理するオブジェクト。
@@ -57,7 +59,9 @@ impl ResourceManager {
                 texture,
                 width: ww as u32,
                 height: wh as u32,
+                x_offset: 0.0,
                 y_offset: 0.0,
+                advance: ww as f32,
             });
         };
 
@@ -74,7 +78,9 @@ impl ResourceManager {
             texture,
             width: ww as u32,
             height: wh as u32,
+            x_offset: outlined_glyph.px_bounds().min.x,
             y_offset: font.ascent() + outlined_glyph.px_bounds().min.y,
+            advance: font.h_advance(outlined_glyph.glyph().id),
         })
     }
 

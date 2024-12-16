@@ -24,14 +24,24 @@ pub struct CharacterImage {
     width: f32,
     /// 文字画像のためのテクスチャアトラス上の高さ。
     height: f32,
+    /// 文字画像のためのテクスチャアトラス上のスケールでのX座標のオフセット。
+    x_offset: f32,
     /// 文字画像のためのテクスチャアトラス上のスケールでのY座標のオフセット。
     y_offset: f32,
+    /// 文字画像のためのテクスチャアトラス上のスケールでの送り幅。
+    advance: f32,
 }
 impl CharacterImage {
     /// heightを基準の高さにしたときの(幅,高さ,Y座標のオフセット)を取得するメソッド。
-    pub fn scale(&self, height: f32) -> (f32, f32, f32) {
+    pub fn scale(&self, height: f32) -> (f32, f32, f32, f32, f32) {
         let r = height / CHARACTER_HEIGHT as f32;
-        (self.width * r, self.height * r, self.y_offset * r)
+        (
+            self.width * r,
+            self.height * r,
+            self.x_offset * r,
+            self.y_offset * r,
+            self.advance * r,
+        )
     }
 }
 
@@ -170,7 +180,9 @@ impl CharacterImagesTextureAtlas {
             ),
             width: result.width as f32,
             height: result.height as f32,
+            x_offset: result.x_offset,
             y_offset: result.y_offset,
+            advance: result.advance,
         };
         self.registered_characters.insert(
             (font_name, character),
